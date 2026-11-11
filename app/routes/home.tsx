@@ -1,13 +1,48 @@
+import { useMemo, useState } from "react";
 import type { Route } from "./+types/home";
-import { Welcome } from "../welcome/welcome";
+import { Link } from "react-router";
+import { formatDate, formatKsh, useWorkspace } from "../data";
+import { Button, Icon, PageTitle } from "../ui";
 
-export function meta({}: Route.MetaArgs) {
-  return [
-    { title: "New React Router App" },
-    { name: "description", content: "Welcome to React Router!" },
-  ];
+export function meta({}: Route.MetaArgs) { return [{ title: "Overview · Northstar" }, { name: "description", content: "A live view of your customer and cash flow." }]; }
+
+function RevenueChart({ invoices, range }: { invoices: ReturnType<typeof useWorkspace>["invoices"]; range: number }) {
+  const points = useMemo(() => {
+    const now = new Date(); const count = range === 7 ? 7 : range === 30 ? 6 : 13;
+    const buckets = Array.from({ length: count }, (_, index) => ({ amount: 0, label: "" }));
+    buckets.forEach((bucket, index) => {
+      if (range === 7) { const date = new Date(now); date.setDate(now.getDate() - (6 - index)); bucket.label = date.toLocaleDateString("en-KE", { weekday: "short" }); }
+      else if (range === 30) { const date = new Date(now); date.setDate(1); date.setMonth(now.getMonth() - 5 + index); bucket.label = date.toLocaleDateString("en-KE", { month: "short" }); }
+      else { const date = new Date(now); date.setDate(now.getDate() - (12 - index) * 7); bucket.label = date.toLocaleDateString("en-KE", { day: "numeric", month: "short" }); }
+    });
+    invoices.filter((invoice) => invoice.status === "Paid" && invoice.paidAt).forEach((invoice) => {
+      const paid = new Date(`${invoice.paidAt}T00:00:00`); const diffDays = Math.floor((now.getTime() - paid.getTime()) / 86400000);
+      if (diffDays < 0) return;
+      if (range === 7 && diffDays <= 6) buckets[6 - diffDays].amount += invoice.amount;
+      if (range === 30 && diffDays <= 183) { const monthDiff = (now.getFullYear() - paid.getFullYear()) * 12 + now.getMonth() - paid.getMonth(); if (monthDiff >= 0 && monthDiff < 6) buckets[5 - monthDiff].amount += invoice.amount; }
+      if (range === 90 && diffDays <= 90) buckets[Math.max(0, count - 1 - Math.floor(diffDays / 7))].amount += invoice.amount;
+    });
+    return buckets;
+  }, [invoices, range]);
+  const max = Math.max(...points.map((point) => point.amount), 1);
+  const width = 720; const height = 220;
+  const coords = points.map((point, index) => ({ x: index / Math.max(points.length - 1, 1) * width, y: height - point.amount / max * (height * .78) - height * .1, ...point }));
+  const path = coords.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
+  const area = `${path} L ${width} ${height} L 0 ${height} Z`;
+  const [selected, setSelected] = useState<number | null>(null);
+  return <div className="chart-wrap"><div className="chart-tooltip-slot" aria-live="polite">{selected !== null && <div className="chart-tooltip"><span>{coords[selected].label}</span><strong>{formatKsh(coords[selected].amount)}</strong></div>}</div><div className="chart-canvas"><div className="chart-ylabels"><span>{formatKsh(max)}</span><span>{formatKsh(max * .75)}</span><span>{formatKsh(max * .5)}</span><span>{formatKsh(max * .25)}</span><span>KSh 0</span></div><svg className="revenue-chart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={`Paid invoice revenue for the last ${range} days`} onMouseLeave={() => setSelected(null)}><defs><linearGradient id="income-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#5877f6" stopOpacity=".2"/><stop offset="100%" stopColor="#5877f6" stopOpacity="0"/></linearGradient></defs>{[0,1,2,3,4].map((line) => <line key={line} x1="0" x2={width} y1={line * height / 4} y2={line * height / 4} className="chart-gridline" />)}<path d={area} fill="url(#income-fill)"/><path d={path} className="chart-line"/>{coords.map((point, index) => <circle key={`${point.label}-${index}`} cx={point.x} cy={point.y} r={selected === index ? 6 : 3.5} className={`chart-point ${selected === index ? "active" : ""}`} onMouseEnter={() => setSelected(index)} onFocus={() => setSelected(index)} tabIndex={index === 0 || index === coords.length - 1 ? 0 : -1} aria-label={`${point.label}: ${formatKsh(point.amount)}`} />)}</svg></div><div className="chart-xlabels">{(range === 7 ? points : points.filter((_, index) => index % (range === 30 ? 1 : 2) === 0)).map((point, index) => <span key={`${point.label}-${index}`}>{point.label}</span>)}</div></div>;
 }
 
 export default function Home() {
-  return <Welcome />;
+  const { customers, invoices } = useWorkspace(); const [range, setRange] = useState(30);
+  const paid = invoices.filter((invoice) => invoice.status === "Paid"); const outstanding = invoices.filter((invoice) => invoice.status === "Sent" || invoice.status === "Overdue");
+  const revenue = paid.reduce((total, invoice) => total + invoice.amount, 0); const due = outstanding.reduce((total, invoice) => total + invoice.amount, 0); const overdue = invoices.filter((invoice) => invoice.status === "Overdue").reduce((total, invoice) => total + invoice.amount, 0);
+  const recent = [...invoices].sort((a, b) => b.issueDate.localeCompare(a.issueDate)).slice(0, 5);
+  return <>
+    <PageTitle eyebrow="YOUR BUSINESS AT A GLANCE" title="Good morning" description="Keep an eye on your customer relationships and cash flow." action={<><Link className="button button-secondary" to="/customers"><Icon name="people" size={15}/> Add customer</Link><Link className="button button-primary" to="/invoices?new=1"><Icon name="plus" size={15}/> Create invoice</Link></>} />
+    <section className="metrics-grid"><article className="metric-card"><div className="metric-top"><span className="metric-label">Collected revenue</span><span className="metric-symbol purple"><Icon name="wallet" size={16}/></span></div><div className="metric-value metric-currency">{formatKsh(revenue)}</div><div className="metric-foot"><span>{paid.length} paid invoices</span><span className="metric-foot-right">Lifetime total</span></div></article><article className="metric-card"><div className="metric-top"><span className="metric-label">Outstanding</span><span className="metric-symbol orange"><Icon name="clock" size={16}/></span></div><div className="metric-value metric-currency">{formatKsh(due)}</div><div className="metric-foot"><span>{outstanding.length} awaiting payment</span><Link className="metric-foot-link" to="/invoices?filter=unpaid">Review</Link></div></article><article className="metric-card"><div className="metric-top"><span className="metric-label">Active customers</span><span className="metric-symbol green"><Icon name="people" size={16}/></span></div><div className="metric-value">{customers.length.toLocaleString("en-KE")}</div><div className="metric-foot"><span>In your workspace</span><Link className="metric-foot-link" to="/customers">View all</Link></div></article><article className="metric-card"><div className="metric-top"><span className="metric-label">Overdue invoices</span><span className="metric-symbol red"><Icon name="file" size={16}/></span></div><div className="metric-value metric-currency">{formatKsh(overdue)}</div><div className="metric-foot"><span>{invoices.filter((invoice) => invoice.status === "Overdue").length} need follow-up</span><Link className="metric-foot-link" to="/invoices?filter=overdue">View overdue</Link></div></article></section>
+    <section className="panel revenue-panel"><div className="panel-heading"><div><div className="panel-kicker">CASH FLOW</div><h2>Collected revenue</h2><p>Revenue from invoices recorded as paid.</p></div><div className="range-control" aria-label="Select chart date range">{[[7,"7 days"],[30,"30 days"],[90,"90 days"]].map(([value,label]) => <button key={value} className={range === value ? "active" : ""} aria-pressed={range === value} onClick={() => setRange(Number(value))}>{label}</button>)}</div></div><div className="chart-summary"><strong>{formatKsh(revenue)}</strong><span className="summary-period">across {paid.length} recorded payments</span></div><RevenueChart invoices={invoices} range={range}/><div className="chart-legend"><span className="legend-dot"/> Paid invoice revenue <span className="legend-note">Hover over the chart to explore</span></div></section>
+    <div className="lower-grid"><section className="panel transactions-panel"><div className="panel-heading compact"><div><div className="panel-kicker">WORKFLOW</div><h2>Recent invoices</h2><p>Pick up where your client work left off.</p></div><Link className="icon-button" to="/invoices" aria-label="All invoices"><Icon name="arrow" size={17}/></Link></div>{recent.length ? <div className="transaction-list">{recent.map((invoice) => <div className="transaction-row invoice-row" key={invoice.id}><div className="invoice-initial"><Icon name="file" size={14}/></div><div className="transaction-person"><strong>{invoice.customerName}</strong><span>{invoice.number} · {invoice.description}</span></div><div className="transaction-detail"><strong>{formatKsh(invoice.amount)}</strong><span>Due {formatDate(invoice.dueDate)}</span></div><span className={`status-badge ${invoice.status.toLowerCase()}`}><i/>{invoice.status}</span></div>)}</div> : <p className="muted-copy">No invoices yet. Create one to start tracking your cash flow.</p>}<Link className="text-link" to="/invoices">Manage invoices <Icon name="arrow" size={14}/></Link></section><section className="panel channels-panel"><div className="panel-heading compact"><div><div className="panel-kicker">NEXT STEPS</div><h2>Keep work moving</h2><p>Simple actions for a healthy client workflow.</p></div></div><div className="workflow-list"><Link to="/customers" className="workflow-item"><span className="workflow-number">01</span><span><strong>Keep your client list current</strong><small>Add contact details once and reuse them on invoices.</small></span><Icon name="chevron" size={15}/></Link><Link to="/invoices?new=1" className="workflow-item"><span className="workflow-number">02</span><span><strong>Create and send an invoice</strong><small>Track draft, sent, paid, and overdue work.</small></span><Icon name="chevron" size={15}/></Link><Link to="/payments" className="workflow-item"><span className="workflow-number">03</span><span><strong>Record a client payment</strong><small>Keep your collected revenue up to date.</small></span><Icon name="chevron" size={15}/></Link></div></section></div>
+    <footer className="page-footer"><span>© 2026 Northstar</span><span className="updated"><span className="live-dot"/> Changes save in this browser</span></footer>
+  </>;
 }

@@ -1,87 +1,31 @@
-# Welcome to React Router!
+# Northstar client workspace
 
-A modern, production-ready template for building full-stack React applications using React Router.
+A responsive business dashboard for managing customer contacts, invoices, and recorded payments. Dashboard metrics, analytics, and exports use Kenyan shillings (KSh) and update from the workspace records.
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
+## Run locally
 
-## Features
-
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
-
-## Getting Started
-
-### Installation
-
-Install the dependencies:
-
-```bash
+```sh
 npm install
-```
-
-### Development
-
-Start the development server with HMR:
-
-```bash
 npm run dev
 ```
 
-Your application will be available at `http://localhost:5173`.
+Open the local address printed by Vite.
 
-## Building for Production
+## Explore the demo
 
-Create a production build:
+- Email: `demo@northstar.app`
+- Password: `northstar`
 
-```bash
-npm run build
-```
+The demo opens with sample customers and invoices. New accounts start with an empty workspace. Account sessions, demo account details, customers, invoices, and payment records are saved in the current browser and isolated by account email.
 
-## Deployment
+## Client workflow
 
-### Docker Deployment
+1. Add a customer with their contact details.
+2. Create an invoice draft and choose the customer, description, amount, and due date.
+3. Send the draft to move it into the awaiting-payment list.
+4. When a client pays, record the payment method. Revenue, customer analytics, and reports update from that record.
+5. Export the invoice register as CSV from Reports.
 
-To build and run using Docker:
+## Demo scope
 
-```bash
-docker build -t my-app .
-
-# Run the container
-docker run -p 3000:3000 my-app
-```
-
-The containerized application can be deployed to any platform that supports Docker, including:
-
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
-
-### DIY Deployment
-
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
-
-```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
-```
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
-
----
-
-Built with ❤️ using React Router.
+Authentication and records are stored locally in the browser. Passwords are hashed before local storage, but this is not secure server-side authentication. Sending an invoice changes its local status; it does not email the client. Recording an M-Pesa, bank, cash, or card payment is a bookkeeping action; it does not move money. Production use needs a server-side account system, database, verified email delivery, backups, and a supported payment integration.
